@@ -1,5 +1,4 @@
 using zfp_jll
-using Base.GC: @preserve
 
 zfp_type(::Type{Int32}) = 1
 zfp_type(::Type{Int64}) = 2
@@ -12,6 +11,7 @@ zfp_type_size(::Type{T}) where T = zfp_type_size(zfp_type(T))
 
 zfp_stream_open() = ccall((:zfp_stream_open,libzfp),Ptr{Cvoid},(Ptr,),C_NULL)
 
+## READ IN ARRAYS
 function zfp_field(A::Array{T,1}) where T
     n = length(A)
     ccall((:zfp_field_1d,libzfp),Ptr{Cvoid},
@@ -22,6 +22,7 @@ function zfp_field(A::Array{T,2}) where T
     nx,ny = size(A)
     ccall((:zfp_field_2d,libzfp),Ptr{Cvoid},
         (Ptr{Cvoid},Cint,Cuint,Cuint),A,zfp_type(T),nx,ny)
+    #ccall((:zfp_field_set_stride_2d, libzfp), Cvoid, (Ptr{Cvoid}, Cint, Cint), field, 1, 100)
 end
 
 function zfp_field(A::Array{T,3}) where T
@@ -36,12 +37,10 @@ function zfp_field(A::Array{T,4}) where T
         (Ptr{Cvoid},Cint,Cuint,Cuint,Cuint,Cuint),A,zfp_type(T),nx,ny,nz,nw)
 end
 
-function zfp_field(A::DenseArray{T}) where T
-    zfp_field(zfp_type(T),)
-
-function zfp_stream_maximum_size(stream::Ptr{Cvoid},field::Ptr{Cvoid})
-    ccall((:zfp_stream_maximum_size,libzfp),Int,
-        (Ptr{Cvoid},Ptr{Cvoid}),stream,field)
+## COMPRESSION OPTIONS
+function zfp_stream_set_rate(stream::Ptr{Cvoid},rate::Real,type::Type,dims::Integer)
+    ccall((:zfp_stream_set_rate,libzfp),Cdouble,
+        (Ptr{Cvoid},Cdouble,Cuint,Cuint),stream,Float64(rate),zfp_type(type),dims)
 end
 
 function zfp_stream_set_precision(stream::Ptr{Cvoid},precision::Integer)
@@ -53,70 +52,111 @@ end
 function zfp_stream_set_accuracy(stream::Ptr{Cvoid},tol::AbstractFloat)
     t = ccall((:zfp_stream_set_accuracy,libzfp),Cdouble,
         (Ptr{Cvoid},Cdouble),stream,Float64(tol))
-    t == tol || @warn "Tolerance set to $t"
+    # t == tol || @warn "Tolerance set to $t"
 end
 
 function zfp_stream_set_reversible(stream::Ptr{Cvoid})
     ccall((:zfp_stream_set_reversible,libzfp),Cvoid,(Ptr{Cvoid},),stream)
 end
 
-# check whether the strides of A correspond to contiguous data
-# from Blosc.jl (S Johnson)
-iscontiguous(::Array) = true
-iscontiguous(::Vector) = true
-iscontiguous(A::DenseVector) = stride(A,1) == 1
-function iscontiguous(A::DenseArray)
-    p = sortperm([strides(A)...])
-    s = 1
-    for k = 1:ndims(A)
-        if stride(A,p[k]) != s
-            return false
-        end
-        s *= size(A,p[k])
-    end
-    return true
+## BUFFER
+function zfp_stream_maximum_size(stream::Ptr{Cvoid},field::Ptr{Cvoid})
+    ccall((:zfp_stream_maximum_size,libzfp),Int,
+        (Ptr{Cvoid},Ptr{Cvoid}),stream,field)
 end
 
-# Returns the size of compressed data inside dest
-function compress!(dest::DenseVector{UInt8},
-                   src::Ptr{T},
-                   src_size::Integer;
-                   level::Integer=5,
-                   shuffle::Bool=true,
-                   itemsize::Integer=sizeof(T)) where {T}
-    iscontiguous(dest) || throw(ArgumentError("dest must be contiguous array"))
-    if !isbitstype(T)
-        throw(ArgumentError("buffer eltype must be `isbits` type"))
-    end
-    if itemsize <= 0
-        throw(ArgumentError("itemsize must be positive"))
-    end
-    if level < 0 || level > 9
-        throw(ArgumentError("invalid compression level $level not in [0,9]"))
-    end
-    if src_size > MAX_BUFFERSIZE
-        throw(ArgumentError("data > $MAX_BUFFERSIZE bytes is not supported by Blosc"))
-    end
-    sz = blosc_compress(level, shuffle, itemsize, src_size, src, dest, sizeof(dest))
-    sz < 0 && error("Blosc internal error when compressing data (errorcode: $sz)")
-    return convert(Int, sz)
+function zfp_stream_compressed_size(stream::Ptr{Cvoid})
+    ccall((:zfp_stream_compressed_size,libzfp),Int,(Ptr{Cvoid},),stream)
 end
 
-compress!(dest::DenseVector{UInt8}, src::AbstractString; kws...) =
-    @preserve src compress!(dest, pointer(src), sizeof(src); kws...)
-
-function compress!(dest::DenseVector{UInt8}, src::DenseArray; kws...)
-    iscontiguous(src) || throw(ArgumentError("src must be a contiguous array"))
-    return @preserve src compress!(dest, pointer(src), sizeof(src); kws...)
+function stream_open(buffer::Ptr,bufsize::Int)
+    ccall((:stream_open,libzfp),Ptr{Cvoid},(Ptr{Cvoid},Cuint),buffer,bufsize)
 end
 
-function compress(src::Ptr{T}, src_size::Integer; kws...) where {T}
-    dest = Vector{UInt8}(undef, src_size + MAX_OVERHEAD)
-    sz = compress!(dest,src,src_size; kws...)
-    @assert(sz > 0 || src_size == 0)
-    return resize!(dest, sz)
+function zfp_stream_set_bit_stream(stream::Ptr{Cvoid},bitstream::Ptr{Cvoid})
+    ccall((:zfp_stream_set_bit_stream,libzfp),Cvoid,(Ptr{Cvoid},Ptr{Cvoid}),
+        stream,bitstream)
 end
-function zfp_compress(src::DenseArray; kws...)
-    iscontiguous(src) || throw(ArgumentError("src must be a contiguous array"))
-    @preserve src zfp_compress(pointer(src), sizeof(src); kws...)
+
+function zfp_stream_rewind(stream::Ptr{Cvoid})
+    ccall((:zfp_stream_rewind,libzfp),Cvoid,(Ptr{Cvoid},),stream)
+end
+
+## COMPRESSION AND DECOMPRESSION
+function zfp_compress(stream::Ptr{Cvoid},field::Ptr{Cvoid})
+    ccall((:zfp_compress,libzfp),Int,(Ptr{Cvoid},Ptr{Cvoid}),stream,field)
+end
+
+function zfp_decompress(stream::Ptr{Cvoid},field::Ptr{Cvoid})
+    ccall((:zfp_decompress,libzfp),Int,(Ptr{Cvoid},Ptr{Cvoid}),stream,field)
+end
+
+function zfp_compress(  src::AbstractArray{T};
+                        tol::Real=0,
+                        precision::Int=0,
+                        rate::Int=0) where {T<:Union{Int32,Int64,Float32,Float64}}
+
+    ndims = length(size(src))
+    ndims in [1,2,3,4] || throw(DimensionMismatch("Zfp compression only for 1-4D array."))
+
+    zfp = zfp_stream_open()
+    field = zfp_field(src)
+
+    # propagate compression options
+    if tol > 0
+        zfp_stream_set_accuracy(zfp,tol)
+    elseif precision > 0
+        zfp_stream_set_precision(zfp,precision)
+    elseif rate > 0
+        maxrate = 8*zfp_type_size(T)
+        rate <= maxrate || @warn "Rate was set to $rate-bit, beyond $maxrate-bit for type $T"
+        zfp_stream_set_rate(zfp,rate,eltype(src),ndims)
+    else
+        zfp_stream_set_reversible(zfp)
+    end
+
+    bufsize = zfp_stream_maximum_size(zfp,field)
+    dest = Vector{UInt8}(undef,bufsize)
+    stream = stream_open(pointer(dest),bufsize)
+    zfp_stream_set_bit_stream(zfp,stream)
+    zfp_stream_rewind(zfp)
+    compressed_size = zfp_compress(zfp,field)
+
+    compressed_size == 0 && throw(error("Zfp compression failed."))
+
+    return dest[1:compressed_size]
+end
+
+function zfp_decompress!(   dest::AbstractArray{T},
+                            src::Vector{UInt8};
+                            tol::Real=0,
+                            precision::Int=0,
+                            rate::Int=0) where {T<:Union{Int32,Int64,Float32,Float64}}
+
+    ndims = length(size(dest))
+    ndims in [1,2,3,4] || throw(DimensionMismatch("Zfp compression only for 1-4D array."))
+
+    zfp = zfp_stream_open()
+    field = zfp_field(dest)
+
+    # propagate compression options
+    if tol > 0
+        zfp_stream_set_accuracy(zfp,tol)
+    elseif precision > 0
+        zfp_stream_set_precision(zfp,precision)
+    elseif rate > 0
+        maxrate = 8*zfp_type_size(T)
+        rate > maxrate && @warn "Rate was set to $rate-bit, beyond $maxrate-bit for type $T"
+        zfp_stream_set_rate(zfp,rate,eltype(dest),ndims)
+    else
+        zfp_stream_set_reversible(zfp)
+    end
+
+    bufsize = zfp_stream_maximum_size(zfp,field)
+    stream = stream_open(pointer(src),bufsize)
+    zfp_stream_set_bit_stream(zfp,stream)
+    zfp_stream_rewind(zfp)
+    compressed_size = zfp_decompress(zfp,field)
+    compressed_size == 0 && throw(error("Zfp decompression failed."))
+    return nothing
 end
