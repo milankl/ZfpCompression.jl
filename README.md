@@ -4,7 +4,7 @@
 [![Build Status](https://ci.appveyor.com/api/projects/status/github/milankl/ZfpCompression.jl?svg=true)](https://ci.appveyor.com/project/milankl/ZfpCompression-jl)
 
 A Julia wrapper for the data compression library [zfp](https://github.com/LLNL/zfp),
-written by P Lindstrom ([@lindstro](https://github.com/lindstro). 
+written by P Lindstrom ([@lindstro](https://github.com/lindstro)). 
 From the [zfp documentation](https://zfp.readthedocs.io/en/release0.5.5/):
 
 *zfp is an open source library for compressed numerical arrays that support high
@@ -47,7 +47,8 @@ the compressed array and performs the compression. This is then returned
 as `Array{UInt8,1}`.
 
 Decompression requires knowledge about the type, size and shape of the uncompressed array.
-This information is not stored in the compressed array.
+This information is not stored in the compressed array. Therefore, we use `similar` here to
+retain that information.
 
 ```julia
 julia> Ad = similar(A);          # preallocate the decompressed array Ad
