@@ -43,7 +43,7 @@ end
 """Pass a 4-D array into a zfp_field in C, in Julia only as Ptr{Cvoid}."""
 function zfp_field(A::Array{T,4}) where T
     nx,ny,nz,nw = size(A)
-    ccall((:zfp_field_4d,libzfp),Ptr{Cvoid},
+    field = ccall((:zfp_field_4d,libzfp),Ptr{Cvoid},
         (Ptr{Cvoid},Cint,Cuint,Cuint,Cuint,Cuint),A,zfp_type(T),nx,ny,nz,nw)
     sx,sy,sz,sw = strides(A)
     ccall((:zfp_field_set_stride_4d, libzfp), Cvoid, (Ptr{Cvoid}, Cint, Cint, Cint, Cint),

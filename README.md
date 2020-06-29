@@ -4,7 +4,7 @@
 [![Build Status](https://ci.appveyor.com/api/projects/status/github/milankl/ZfpCompression.jl?svg=true)](https://ci.appveyor.com/project/milankl/ZfpCompression-jl)
 
 A Julia wrapper for the data compression library [zfp](https://github.com/LLNL/zfp),
-written by P Lindstrom ([@lindstro](https://github.com/lindstro)). 
+written by P Lindstrom ([@lindstro](https://github.com/lindstro)).
 From the [zfp documentation](https://zfp.readthedocs.io/en/release0.5.5/):
 
 *zfp is an open source library for compressed numerical arrays that support high
@@ -22,6 +22,8 @@ pecifically for 1D streams.*
 
 See the documentation, or [zfp's website](https://computing.llnl.gov/projects/floating-point-compression)
 for more information.
+
+Requires Julia v1.3 or newer
 
 ## Usage
 ### Lossless compression
