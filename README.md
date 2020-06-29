@@ -68,7 +68,7 @@ If none are specified (as in the example above) the compression is lossless
 (i.e. reversible). Lossy compression parameters are
 
 - [`tol` defines the maximum absolute error that is tolerated.](https://zfp.readthedocs.io/en/release0.5.5/modes.html#fixed-accuracy-mode)
-- [`precision` is roughly equivalent to the retained mantissa bits.](https://zfp.readthedocs.io/en/release0.5.5/modes.html#fixed-precision-mode)
+- [`precision` controls the precision, bounding a weak relative error](https://zfp.readthedocs.io/en/release0.5.5/modes.html#fixed-precision-mode), see this [FAQ](https://zfp.readthedocs.io/en/develop/faq.html#q-relerr)
 - [`rate` fixes the bits used per value.](https://zfp.readthedocs.io/en/release0.5.5/modes.html#fixed-rate-mode)
 
 Only **one** of `tol, precision` or `rate` should be specified. For further details
