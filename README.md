@@ -76,7 +76,7 @@ If none are specified (as in the example above) the compression is lossless
 Only **one** of `tol, precision` or `rate` should be specified. For further details
 see the [zfp documentation](https://zfp.readthedocs.io/en/release0.5.5/modes.html#compression-modes).
 
-If we can tolerate a maximum absolute error of 1e-5, we may do
+If we can tolerate a maximum absolute error of 1e-3, we may do
 ```julia
 julia> Ac = zfp_compress(A,tol=1e-3)
 9048-element Array{UInt8,1}:
