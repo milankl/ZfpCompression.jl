@@ -8,8 +8,7 @@ using Test
         for sizes in [(100,),(100,50),(20,30,40),(20,20,20,20)]
             A = rand(Float32,sizes...)
             Ac = zfp_compress(A)
-            Ad = similar(A)
-            zfp_decompress!(Ad,Ac)
+            Ad = zfp_decompress(Ac)
             @test Ad == A
         end
     end
@@ -23,9 +22,8 @@ end
         # test 1-4D
         for sizes in [(100,),(100,50),(20,30,40),(20,20,20,20)]
             A = rand(Float32,sizes...)
-            Ac = zfp_compress(A,tol=tol)
-            Ad = similar(A)
-            zfp_decompress!(Ad,Ac,tol=tol)
+            Ac = zfp_compress(A)
+            Ad = zfp_decompress(Ac)
             @test maximum(abs.(Ad-A)) <= tol
         end
     end
