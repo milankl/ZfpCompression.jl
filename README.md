@@ -46,14 +46,25 @@ julia> Ac = zfp_compress(A)
 ```
 which initializes the zfp compression, preallocates the bitstream used for
 the compressed array and performs the compression. The compressed array is returned
-as `Array{UInt8,1}`.
-
-For decompression the compressed array includes a header with the required
+as `Array{UInt8,1}`. By default, the compressed array includes a header with the required
 information about the type, size and shape of the uncompressed array as well
-as lossy compression parameters (see below)
+as lossy compression parameters (see below). This header can be deactivated with
+```julia
+julia> Ac = zfp_compress(A,write_header=false)
+```
+
+A compressed array (with header) can be decompressed as
 
 ```julia
 julia> Ad = zfp_decompress(Ac)
+```
+
+Alternatively, the decompression of header-less compressed arrays can be performed
+into an existing array (with same type, size and dimensions as the uncompressed array)
+
+```julia
+julia> Ad = similar(A)
+julia> zfp_decompress!(Ad,Ac)
 ```
 
 In this lossless example the compression is reversible
@@ -98,6 +109,13 @@ absolute error is limited to about 3e-4.
 julia> A2 = zfp_decompress(Ac)
 julia> maximum(abs.(A2 - A))
 0.00030493736f0
+```
+
+For header-less compression, it is **essential** to provide the same compression
+parameters also for `zfp_decompress!`. Otherwise the decompressed array is flawed. E.g.
+```julia
+julia> A2 = similar(A)
+julia> zfp_decompress!(A2,Ac,tol=1e-3)
 ```
 
 ## Installation
