@@ -56,14 +56,6 @@ as lossy compression parameters (see below)
 julia> Ad = zfp_decompress(Ac)
 ```
 
-Alternatively, the decompression can be performed into an existing array (with
-same type, size and dimensions as the uncompressed array)
-
-```julia
-julia> Ad = similar(A)
-julia> zfp_decompress!(Ad,Ac)
-```
-
 In this lossless example the compression is reversible
 ```julia
 julia> A == Ad
