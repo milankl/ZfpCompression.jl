@@ -45,18 +45,26 @@ julia> Ac = zfp_compress(A)
     ⋮
 ```
 which initializes the zfp compression, preallocates the bitstream used for
-the compressed array and performs the compression. This is then returned
+the compressed array and performs the compression. The compressed array is returned
 as `Array{UInt8,1}`.
 
-Decompression requires knowledge about the type, size and shape of the uncompressed array.
-This information is not stored in the compressed array. Therefore, we use `similar` here to
-retain that information.
+For decompression the compressed array includes a header with the required
+information about the type, size and shape of the uncompressed array as well
+as lossy compression parameters (see below)
 
 ```julia
-julia> Ad = similar(A);          # preallocate the decompressed array Ad
-julia> zfp_decompress!(Ad,Ac)    # decompress compressed array into the decompressed array
+julia> Ad = zfp_decompress(Ac)
 ```
-In the lossless example from above the compression is reversible
+
+Alternatively, the decompression can be performed into an existing array (with
+same type, size and dimensions as the uncompressed array)
+
+```julia
+julia> Ad = similar(A)
+julia> zfp_decompress!(Ad,Ac)
+```
+
+In this lossless example the compression is reversible
 ```julia
 julia> A == Ad
 true
@@ -76,7 +84,7 @@ If none are specified (as in the example above) the compression is lossless
 Only **one** of `tol, precision` or `rate` should be specified. For further details
 see the [zfp documentation](https://zfp.readthedocs.io/en/release0.5.5/modes.html#compression-modes).
 
-If we can tolerate a maximum absolute error of 1e-5, we may do
+If we can tolerate a maximum absolute error of 1e-3, we may do
 ```julia
 julia> Ac = zfp_compress(A,tol=1e-3)
 9048-element Array{UInt8,1}:
@@ -92,15 +100,13 @@ julia> Ac = zfp_compress(A,tol=1e-3)
  0xd4
     ⋮
 ```
-which clearly reduces the size of the compressed array. It is **essential**
-to provide the same compression parameters also for `zfp_decompress!`. Otherwise
-the decompressed array is flawed.
+which clearly reduces the size of the compressed array. In this case the maximum
+absolute error is limited to about 3e-4.
 ```julia
-julia> zfp_decompress!(A2,Ac,tol=1e-3)
+julia> A2 = zfp_decompress(Ac)
 julia> maximum(abs.(A2 - A))
 0.00030493736f0
 ```
-In this case the maximum absolute error is limited to about 3e-4.
 
 ## Installation
 

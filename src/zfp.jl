@@ -277,34 +277,34 @@ function zfp_compress(  src::AbstractArray{T};
     return dest[1:compressed_size]
 end
 
-function zfp_decompress!(   dest::AbstractArray{T},
-                            src::Vector{UInt8};
-                            kws...) where {T<:Union{Int32,Int64,Float32,Float64}}
-
-    ndims = length(size(dest))
-    ndims in [1,2,3,4] || throw(DimensionMismatch("Zfp compression only for 1-4D array."))
-
-    zfp = zfp_stream(T,ndims;kws...)    # initialize decompression
-    field = zfp_field(dest)             # turn destination array into zfp pointer
-
-    # declare src as the bitstream to decompress and connect to zfp struct
-    bufsize = zfp_stream_maximum_size(zfp,field)
-    bitstream = stream_open(pointer(src),bufsize)
-    zfp_stream_set_bit_stream(zfp,bitstream)
-    zfp_stream_rewind(zfp)
-
-    # perform decompression
-    compressed_size = zfp_decompress(zfp,field)
-
-    # free and close
-    zfp_field_free(field)
-    zfp_stream_close(zfp)
-    stream_close(bitstream)
-
-    # check for failure
-    compressed_size == 0 && throw(error("Zfp decompression failed."))
-    return nothing
-end
+# function zfp_decompress!(   dest::AbstractArray{T},
+#                             src::Vector{UInt8};
+#                             kws...) where {T<:Union{Int32,Int64,Float32,Float64}}
+#
+#     ndims = length(size(dest))
+#     ndims in [1,2,3,4] || throw(DimensionMismatch("Zfp compression only for 1-4D array."))
+#
+#     zfp = zfp_stream(T,ndims;kws...)    # initialize decompression
+#     field = zfp_field(dest)             # turn destination array into zfp pointer
+#
+#     # declare src as the bitstream to decompress and connect to zfp struct
+#     bufsize = zfp_stream_maximum_size(zfp,field)
+#     bitstream = stream_open(pointer(src),bufsize)
+#     zfp_stream_set_bit_stream(zfp,bitstream)
+#     zfp_stream_rewind(zfp)
+#
+#     # perform decompression
+#     compressed_size = zfp_decompress(zfp,field)
+#
+#     # free and close
+#     zfp_field_free(field)
+#     zfp_stream_close(zfp)
+#     stream_close(bitstream)
+#
+#     # check for failure
+#     compressed_size == 0 && throw(error("Zfp decompression failed."))
+#     return nothing
+# end
 
 function zfp_decompress(src::Vector{UInt8})
 
