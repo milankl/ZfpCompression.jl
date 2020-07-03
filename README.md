@@ -120,9 +120,8 @@ julia> zfp_decompress!(A2,Ac,tol=1e-3)
 
 ## Installation
 
-Not yet registered, hence
-
+ZfpCompression.jl is registered in the Julia Registry, so simply do
 ```julia
-julia>] add https://github.com/milankl/ZfpCompression.jl
+julia>] add ZfpCompression
 ```
-The C library is installed and built automatically.
+and the C library is installed and built automatically.
