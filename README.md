@@ -28,8 +28,8 @@ Requires Julia v1.3 or newer
 ## Example
 
 ![OzoneCompression](figures/zfp_precision3d_o3_85.png?raw=true "OzoneZfpCompression")  
-*Compression of ozone (O3) from the CAMS data set with zfp at various levels of precision.
-Compression factors are relative to 32-bit Float32.*
+*Compression of ozone (O₃) from the [CAMS data set](https://ads.atmosphere.copernicus.eu/about-cams) with zfp at various levels of precision.
+Compression factors are relative to 64-bit floats.*
 
 ## Usage
 ### Lossless compression
