@@ -25,6 +25,12 @@ for more information.
 
 Requires Julia v1.3 or newer
 
+## Example
+
+![OzoneCompression](figures/zfp_precision3d_o3_85.png?raw=true "OzoneZfpCompression")  
+*Compression of ozone (O3) from the CAMS data set with zfp at various levels of precision.
+Compression factors are relative to 32-bit Float32.*
+
 ## Usage
 ### Lossless compression
 
