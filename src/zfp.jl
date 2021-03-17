@@ -192,7 +192,7 @@ end
 """Open a buffer (= pointer for a preallocated data array) into a bitstream
     for zfp to flush the compressed array into."""
 function stream_open(buffer::Ptr,bufsize::Int)
-    ccall((:stream_open,libzfp),Ptr{Cvoid},(Ptr{Cvoid},Cuint),buffer,bufsize)
+    ccall((:stream_open,libzfp),Ptr{Cvoid},(Ptr{Cvoid},Int),buffer,bufsize)
 end
 
 """Close the compressed bitstream."""
