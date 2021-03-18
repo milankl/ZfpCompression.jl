@@ -17,8 +17,8 @@ continuous fields from physics simulations, images, regularly sampled terrain
 surfaces, etc. Although zfp also provides a 1D array class that can be used for
 1D signals such as audio, or even unstructured floating-point streams, the
 compression scheme has not been well optimized for this use case, and rate and
-quality may not be competitive with floating-point compressors designed s
-pecifically for 1D streams.*
+quality may not be competitive with floating-point compressors designed
+specifically for 1D streams.*
 
 See the documentation, or [zfp's website](https://computing.llnl.gov/projects/floating-point-compression)
 for more information.
@@ -123,6 +123,25 @@ parameters also for `zfp_decompress!`. Otherwise the decompressed array is flawe
 julia> A2 = similar(A)
 julia> zfp_decompress!(A2,Ac,tol=1e-3)
 ```
+
+## OpenMP multi-threading
+
+You can use compress in parallel using the `nthreads` argument of `zfp_compress` to trigger multi-threading via OpenMP.
+No parallel decompression is currently (zfp v0.5.5) provided in the underlying C library.
+On linux, `zfp_jll` is automatically built with OpenMP enabled,
+[on macOS this is not supported by default](https://zfp.readthedocs.io/en/release0.5.5/execution.html#using-openmp).
+
+```julia
+julia> @time zfp_compress(temp,nthreads=8)
+```
+
+Compressing a 590MB array `A` with `precision=10` is benchmarked (`@btime`) as
+
+Number of threads |      1|       2|        4|        8|       16|      32|
+| --------------- | -----:| -----: | ------: | ------: | -------:|-------:|
+Time              | 2.45s | 1.46s  | 0.73s   | 0.38s   | 0.25s   | 0.20s  |
+Speed-up          |     1x|  1.7x  | 3.4x    | 6.4x    | 9.8x    | 12.3x  |
+
 
 ## Installation
 
