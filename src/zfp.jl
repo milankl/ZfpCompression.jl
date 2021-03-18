@@ -21,6 +21,7 @@ zfp_type(::Type) = 0
     zfp_type_double = 4
 end
 
+#TODO mapping from C to Julia seems to be inconsistent here
 @enum ZfpExecPolicy begin
     zfp_exec_serial = 0     # serial execution (default)
     zfp_exec_omp    = 1     # OpenMP multi-threaded execution
@@ -301,7 +302,6 @@ function zfp_compress(  src::AbstractArray{T};
     end
 
     if nthreads > 1
-        zfp_stream_set_execution(bitstream,:openmp)
         zfp_stream_set_omp_threads(bitstream,nthreads)
     end
 
