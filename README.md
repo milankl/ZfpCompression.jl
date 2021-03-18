@@ -132,7 +132,7 @@ On linux, `zfp_jll` is automatically built with OpenMP enabled,
 [on macOS this is not supported by default](https://zfp.readthedocs.io/en/release0.5.5/execution.html#using-openmp).
 
 ```julia
-julia> @time zfp_compress(temp,nthreads=8)
+julia> zfp_compress(temp,nthreads=8)
 ```
 
 Compressing a 590MB array `A` with `precision=10` is benchmarked (`@btime`) as
