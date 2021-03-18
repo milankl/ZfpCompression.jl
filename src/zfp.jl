@@ -21,6 +21,12 @@ zfp_type(::Type) = 0
     zfp_type_double = 4
 end
 
+@enum ZfpExecPolicy begin
+    zfp_exec_serial = 0     # serial execution (default)
+    zfp_exec_omp    = 1     # OpenMP multi-threaded execution
+    zfp_exec_cuda   = 2     # CUDA parallel execution
+end
+
 function zfp_type(i::Int)
     i == 1 && return Int32
     i == 2 && return Int64
@@ -136,14 +142,12 @@ end
 function zfp_stream_set_precision(stream::Ptr{Cvoid},precision::Integer)
     ccall((:zfp_stream_set_precision,libzfp),Cuint,
         (Ptr{Cvoid},Cuint),stream,UInt(precision))
-    # p == precision || @warn "Precision set to $p"
 end
 
-"""Set the accuracy (=max abs error) for compression."""
+"""Set the accuracy (>=max abs error) for compression."""
 function zfp_stream_set_accuracy(stream::Ptr{Cvoid},tol::AbstractFloat)
     ccall((:zfp_stream_set_accuracy,libzfp),Cdouble,
         (Ptr{Cvoid},Cdouble),stream,Float64(tol))
-    # t == tol || @warn "Tolerance set to $t"
 end
 
 """Set the zfp compression to lossless = reversible."""
@@ -230,6 +234,38 @@ function zfp_read_header(stream::Ptr{Cvoid},field::Ptr{Cvoid},HEADER::Int)
         stream,field,HEADER)
 end
 
+# SET OPENMP NUMBER OF THREADS
+"""Set the number of OpenMP threads for compression, also switches ZfpExecPolicy to OpenMP."""
+function zfp_stream_set_omp_threads(stream::Ptr{Cvoid},nthreads::Integer)
+    success = ccall((:zfp_stream_set_omp_threads,libzfp),Cuint,
+        (Ptr{Cvoid},Cuint),stream,UInt(nthreads))
+    success == 0 && throw("Enabling OpenMP failed.") 
+end
+
+"""Return the current execution policy (serial/OpenMP/CUDA)."""
+function zfp_stream_execution(stream::Ptr{Cvoid})
+    ccall((:zfp_stream_execution,libzfp),ZfpExecPolicy,(Ptr{Cvoid},),stream)
+end
+
+"""Set the current execution policy to serial, OpenMP or CUDA."""
+function zfp_stream_set_execution(stream::Ptr{Cvoid},execution::Symbol)
+    if execution == :serial
+        exec_policy = ZfpExecPolicy(0)
+    elseif execution == :openmp
+        exec_policy = ZfpExecPolicy(1)
+    elseif execution == :cuda
+        # exec_policy = ZfpExecPolicy(2)   
+        throw("CUDA currently unsupported for ZfpCompression.jl.")
+    else
+        throw("Execution $execution unsupported.")
+    end
+
+    success = ccall((:zfp_stream_set_execution,libzfp),Int,
+        (Ptr{Cvoid},ZfpExecPolicy),stream,exec_policy)
+
+    success == 0 && throw("Enabling $execution failed.")
+end
+
 # COMPRESSION AND DECOMPRESSION
 """Low-level C call to run the compression."""
 function zfp_compress(stream::Ptr{Cvoid},field::Ptr{Cvoid})
@@ -243,6 +279,7 @@ end
 
 function zfp_compress(  src::AbstractArray{T};
                         write_header::Bool=true,
+                        nthreads::Int=1,
                         kws...) where {T<:Union{Int32,Int64,Float32,Float64}}
 
     ndims = length(size(src))
@@ -261,6 +298,11 @@ function zfp_compress(  src::AbstractArray{T};
     # write header
     if write_header && zfp_write_header(zfp,field,HEADER_FULL) == 0
         throw(error("Writing header failed."))
+    end
+
+    if nthreads > 1
+        zfp_stream_set_execution(bitstream,:openmp)
+        zfp_stream_set_omp_threads(bitstream,nthreads)
     end
 
     # perform compression
