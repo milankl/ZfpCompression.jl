@@ -217,6 +217,11 @@ function zfp_stream_rewind(stream::Ptr{Cvoid})
     ccall((:zfp_stream_rewind,libzfp),Cvoid,(Ptr{Cvoid},),stream)
 end
 
+"""Rewind the data stream."""
+function zfp_stream_flush(stream::Ptr{Cvoid})
+    ccall((:zfp_stream_flush,libzfp),Cvoid,(Ptr{Cvoid},),stream)
+end
+
 """Close the zfp stream."""
 function zfp_stream_close(stream::Ptr{Cvoid})
     ccall((:zfp_stream_close,libzfp),Cvoid,(Ptr{Cvoid},),stream)
@@ -302,14 +307,14 @@ function zfp_compress(  src::AbstractArray{T};
     end
 
     if nthreads > 1
-        zfp_stream_set_omp_threads(bitstream,nthreads)
+        zfp_stream_set_omp_threads(zfp,nthreads)
     end
 
     # perform compression
-    compressed_size = zfp_compress(zfp,field)
-
-    # check for failure
-    compressed_size == 0 && throw(error("Zfp compression failed."))
+    success = zfp_compress(zfp,field)
+    success == 0 && throw(error("Zfp compression failed."))
+    zfp_stream_flush(zfp)
+    compressed_size = zfp_stream_compressed_size(zfp)
 
     # free and close
     zfp_field_free(field)
