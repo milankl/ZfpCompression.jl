@@ -291,34 +291,35 @@ function zfp_compress(  src::AbstractArray{T};
     ndims = length(size(src))
     ndims in [1,2,3,4] || throw(DimensionMismatch("Zfp compression only for 1-4D array."))
 
-    zfp = zfp_stream(T,ndims;kws...)    # initialize the compression
-    field = zfp_field(src)              # turn src array into zfp field
+    zfpstream = zfp_stream(T,ndims;kws...)  # initialize the compression
+    field = zfp_field(src)                  # turn src array into zfp field
 
     # preallocate the compressed array
-    bufsize = zfp_stream_maximum_size(zfp,field)
+    bufsize = zfp_stream_maximum_size(zfpstream,field)
     dest = Vector{UInt8}(undef,bufsize)             # allocate as UInt8
     bitstream = stream_open(pointer(dest),bufsize)  # turn array into zfp pointer
-    zfp_stream_set_bit_stream(zfp,bitstream)        # connect bitstream pointer to zfp struct
-    zfp_stream_rewind(zfp)
+    zfp_stream_set_bit_stream(zfpstream,bitstream)  # connect bitstream pointer to zfp struct
+    zfp_stream_rewind(zfpstream)
 
     # write header
-    if write_header && zfp_write_header(zfp,field,HEADER_FULL) == 0
+    if write_header && zfp_write_header(zfpstream,field,HEADER_FULL) == 0
         throw(error("Writing header failed."))
     end
 
+    # Enable OpenMP multi-threading
     if nthreads > 1
-        zfp_stream_set_omp_threads(zfp,nthreads)
+        zfp_stream_set_omp_threads(zfpstream,nthreads)
     end
 
     # perform compression
-    success = zfp_compress(zfp,field)
+    success = zfp_compress(zfpstream,field)
     success == 0 && throw(error("Zfp compression failed."))
-    zfp_stream_flush(zfp)
-    compressed_size = zfp_stream_compressed_size(zfp)
+    zfp_stream_flush(zfpstream)
+    compressed_size = zfp_stream_compressed_size(zfpstream)
 
     # free and close
     zfp_field_free(field)
-    zfp_stream_close(zfp)
+    zfp_stream_close(zfpstream)
     stream_close(bitstream)
 
     return dest[1:compressed_size]
@@ -331,21 +332,21 @@ function zfp_decompress!(   dest::AbstractArray{T},
     ndims = length(size(dest))
     ndims in [1,2,3,4] || throw(DimensionMismatch("Zfp compression only for 1-4D array."))
 
-    zfp = zfp_stream(T,ndims;kws...)    # initialize decompression
+    zfpstream = zfp_stream(T,ndims;kws...)    # initialize decompression
     field = zfp_field(dest)             # turn destination array into zfp pointer
 
     # declare src as the bitstream to decompress and connect to zfp struct
-    bufsize = zfp_stream_maximum_size(zfp,field)
+    bufsize = zfp_stream_maximum_size(zfpstream,field)
     bitstream = stream_open(pointer(src),bufsize)
-    zfp_stream_set_bit_stream(zfp,bitstream)
-    zfp_stream_rewind(zfp)
+    zfp_stream_set_bit_stream(zfpstream,bitstream)
+    zfp_stream_rewind(zfpstream)
 
     # perform decompression
-    compressed_size = zfp_decompress(zfp,field)
+    compressed_size = zfp_decompress(zfpstream,field)
 
     # free and close
     zfp_field_free(field)
-    zfp_stream_close(zfp)
+    zfp_stream_close(zfpstream)
     stream_close(bitstream)
 
     # check for failure
@@ -357,8 +358,8 @@ function zfp_decompress(src::Vector{UInt8})
 
     field = zfp_field_alloc()
     bitstream = stream_open(pointer(src),length(src))
-    zfp = zfp_stream_open(bitstream)
-    if zfp_read_header(zfp,field,HEADER_FULL) == 0
+    zfpstream = zfp_stream_open(bitstream)
+    if zfp_read_header(zfpstream,field,HEADER_FULL) == 0
         throw(error("Reading header failed."))
     end
 
@@ -373,11 +374,11 @@ function zfp_decompress(src::Vector{UInt8})
     output = Array{T,ndims}(undef,n...)
     zfp_field_set_pointer(field,pointer(output))
 
-    compressed_size = zfp_decompress(zfp,field)
+    compressed_size = zfp_decompress(zfpstream,field)
 
     # free and close
     zfp_field_free(field)
-    zfp_stream_close(zfp)
+    zfp_stream_close(zfpstream)
     stream_close(bitstream)
 
     # check for failure
