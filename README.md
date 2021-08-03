@@ -1,7 +1,7 @@
 # ZfpCompression.jl
 [![CI](https://github.com/milankl/ZfpCompression.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/milankl/ZfpCompression.jl/actions/workflows/CI.yml)
 
-Julia bindings for the data compression library [zfp](https://github.com/LLNL/zfp),
+Julia bindings for the data compression library [zfp](https://github.com/LLNL/zfp) v0.5.5,
 written by P Lindstrom ([@lindstro](https://github.com/lindstro)).
 From the [zfp documentation](https://zfp.readthedocs.io/en/release0.5.5/):
 
