@@ -99,7 +99,7 @@ function zfp_field(A::Array{T,4}) where T
 end
 
 """Allocate an empty zfp field."""
-zfp_field_alloc() = ccall((:zfp_field_alloc,libzfp),Ptr{Cvoid},(Ptr,),C_NULL)
+zfp_field_alloc() = ccall((:zfp_field_alloc,libzfp),Ptr{Cvoid},(Ptr{Cvoid},),C_NULL)
 
 """Free the zfp field."""
 function zfp_field_free(field::Ptr{Cvoid})
@@ -124,7 +124,7 @@ zfp_field_set_pointer(field::Ptr{Cvoid},ptr::Ptr) = ccall(
 
 # COMPRESSION OPTIONS
 """Open a stream (=object that holds the (de)compression settings) for zfp."""
-zfp_stream_open() = ccall((:zfp_stream_open,libzfp),Ptr{Cvoid},(Ptr,),C_NULL)
+zfp_stream_open() = ccall((:zfp_stream_open,libzfp),Ptr{Cvoid},(Ptr{Cvoid},),C_NULL)
 
 """Open a stream (=object that holds the (de)compression settings) for zfp
 from an exisiting bitstream used for storing the compressed array."""
