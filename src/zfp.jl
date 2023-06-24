@@ -47,10 +47,10 @@ struct ZfpField
     ny::Csize_t
     nz::Csize_t
     nw::Csize_t
-    sx::Cint
-    sy::Cint
-    sz::Cint
-    sw::Cint
+    sx::Cptrdiff_t
+    sy::Cptrdiff_t
+    sz::Cptrdiff_t
+    sw::Cptrdiff_t
     data::Ptr{Cvoid}
 end
 
