@@ -1,2 +1,5 @@
 Manifest.toml
 .DS_Store
+
+#Microsoft Visual Code IDE
+/.vscode/
