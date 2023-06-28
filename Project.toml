@@ -7,6 +7,7 @@ version = "0.2.1"
 zfp_jll = "007be453-5351-5f08-b8c7-bf95923b8de2"
 
 [compat]
+zfp_jll = "1"
 julia = "1.3"
 
 [extras]
