@@ -1,9 +1,9 @@
 module ZfpCompression
 
-    using zfp_jll
+using zfp_jll
 
-    export zfp_compress, zfp_decompress, zfp_decompress!
+export zfp_compress, zfp_decompress, zfp_decompress!
 
-    include("zfp.jl")
+include("zfp.jl")
 
 end
