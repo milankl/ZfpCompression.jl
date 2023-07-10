@@ -148,3 +148,9 @@ ZfpCompression.jl is registered in the Julia Registry, so simply do
 julia>] add ZfpCompression
 ```
 and the C library is installed and built automatically.
+
+## Citation
+
+If you use this library for your own work, please give us credits by citing our publication this package was developed for
+
+> Klöwer M, M Razinger, JJ Dominguez, PD Düben and TN Palmer, 2021. *Compressing atmospheric data into its real information content*, **Nature Computational Science**, 1, 713-724, doi:[10.1038/s43588-021-00156-2](https://doi.org/10.1038/s43588-021-00156-2)
