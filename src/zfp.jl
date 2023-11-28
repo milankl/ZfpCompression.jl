@@ -60,9 +60,9 @@ ZfpField(field::Ptr) = unsafe_load(Ptr{ZfpField}(field))
 function zfp_field(A::Array{T,1}) where {T}
     n = length(A)
     field = ccall((:zfp_field_1d, libzfp), Ptr{Cvoid},
-        (Ptr{Cvoid}, Cint, Cuint), A, zfp_type(T), n)
+        (Ptr{Cvoid}, Clong, Cuint), A, zfp_type(T), n)
     sx = strides(A)[1]
-    ccall((:zfp_field_set_stride_1d, libzfp), Cvoid, (Ptr{Cvoid}, Cint), field, sx)
+    ccall((:zfp_field_set_stride_1d, libzfp), Cvoid, (Ptr{Cvoid}, Clong), field, sx)
     return field
 end
 
@@ -70,9 +70,9 @@ end
 function zfp_field(A::Array{T,2}) where {T}
     nx, ny = size(A)
     field = ccall((:zfp_field_2d, libzfp), Ptr{Cvoid},
-        (Ptr{Cvoid}, Cint, Cuint, Cuint), A, zfp_type(T), nx, ny)
+        (Ptr{Cvoid}, Clong, Cuint, Cuint), A, zfp_type(T), nx, ny)
     sx, sy = strides(A)
-    ccall((:zfp_field_set_stride_2d, libzfp), Cvoid, (Ptr{Cvoid}, Cint, Cint), field, sx, sy)
+    ccall((:zfp_field_set_stride_2d, libzfp), Cvoid, (Ptr{Cvoid}, Clong, Clong), field, sx, sy)
     return field
 end
 
@@ -80,9 +80,9 @@ end
 function zfp_field(A::Array{T,3}) where {T}
     nx, ny, nz = size(A)
     field = ccall((:zfp_field_3d, libzfp), Ptr{Cvoid},
-        (Ptr{Cvoid}, Cint, Cuint, Cuint, Cuint), A, zfp_type(T), nx, ny, nz)
+        (Ptr{Cvoid}, Clong, Cuint, Cuint, Cuint), A, zfp_type(T), nx, ny, nz)
     sx, sy, sz = strides(A)
-    ccall((:zfp_field_set_stride_3d, libzfp), Cvoid, (Ptr{Cvoid}, Cint, Cint, Cint),
+    ccall((:zfp_field_set_stride_3d, libzfp), Cvoid, (Ptr{Cvoid}, Clong, Clong, Clong),
         field, sx, sy, sz)
     return field
 end
@@ -91,9 +91,9 @@ end
 function zfp_field(A::Array{T,4}) where {T}
     nx, ny, nz, nw = size(A)
     field = ccall((:zfp_field_4d, libzfp), Ptr{Cvoid},
-        (Ptr{Cvoid}, Cint, Cuint, Cuint, Cuint, Cuint), A, zfp_type(T), nx, ny, nz, nw)
+        (Ptr{Cvoid}, Clong, Cuint, Cuint, Cuint, Cuint), A, zfp_type(T), nx, ny, nz, nw)
     sx, sy, sz, sw = strides(A)
-    ccall((:zfp_field_set_stride_4d, libzfp), Cvoid, (Ptr{Cvoid}, Cint, Cint, Cint, Cint),
+    ccall((:zfp_field_set_stride_4d, libzfp), Cvoid, (Ptr{Cvoid}, Clong, Clong, Clong, Clong),
         field, sx, sy, sz, sw)
     return field
 end
