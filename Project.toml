@@ -1,7 +1,7 @@
 name = "ZfpCompression"
 uuid = "43441a71-1662-41c6-b8ea-40ed1525242b"
 authors = ["Milan K <milankloewer@gmx.de> and contributors"]
-version = "0.2.2"
+version = "0.2.3"
 
 [deps]
 zfp_jll = "007be453-5351-5f08-b8c7-bf95923b8de2"
