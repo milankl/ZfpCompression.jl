@@ -1,7 +1,7 @@
 # ZfpCompression.jl
 [![CI](https://github.com/milankl/ZfpCompression.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/milankl/ZfpCompression.jl/actions/workflows/CI.yml)
 
-Julia bindings for the data compression library [zfp](https://github.com/LLNL/zfp) v0.5.5,
+Julia bindings for the data compression library [zfp](https://github.com/LLNL/zfp) v1.0,
 written by P Lindstrom ([@lindstro](https://github.com/lindstro)).
 From the [zfp documentation](https://zfp.readthedocs.io/en/release0.5.5/):
 
@@ -21,7 +21,7 @@ specifically for 1D streams.*
 See the documentation, or [zfp's website](https://computing.llnl.gov/projects/floating-point-compression)
 for more information.
 
-Requires Julia v1.3 or newer
+Requires Julia v1.3 or newer. With v0.2.2 we use zfp v1.0.0, previous releases are based on zfp v0.5.5.
 
 ## Example
 
