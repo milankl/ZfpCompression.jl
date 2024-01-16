@@ -260,7 +260,7 @@ function zfp_stream_set_execution(stream::Ptr{Cvoid}, execution::Symbol)
     elseif execution == :openmp
         exec_policy = ZfpExecPolicy(1)
     elseif execution == :cuda
-        # exec_policy = ZfpExecPolicy(2)   
+        # exec_policy = ZfpExecPolicy(2)
         throw("CUDA currently unsupported for ZfpCompression.jl.")
     else
         throw("Execution $execution unsupported.")
@@ -326,7 +326,7 @@ function zfp_compress(src::AbstractArray{T};
 end
 
 function zfp_decompress!(dest::AbstractArray{T},
-    src::Vector{UInt8};
+    src::AbstractVector{UInt8};
     kws...) where {T<:Union{Int32,Int64,Float32,Float64}}
 
     ndims = length(size(dest))
@@ -354,7 +354,7 @@ function zfp_decompress!(dest::AbstractArray{T},
     return nothing
 end
 
-function zfp_decompress(src::Vector{UInt8})
+function zfp_decompress(src::AbstractVector{UInt8})
 
     field = zfp_field_alloc()
     bitstream = stream_open(pointer(src), length(src))
