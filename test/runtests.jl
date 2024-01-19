@@ -9,7 +9,8 @@ using Test
             A = rand(T,sizes...)
             Ac = zfp_compress(A)
             Ad = zfp_decompress(Ac)
-            @test Ad == A
+            Adviews = zfp_decompress(view(Ac,:))
+            @test Ad == Adviews == A
         end
     end
 
@@ -19,7 +20,8 @@ using Test
             A = rand(T,sizes...)
             Ac = zfp_compress(A)
             Ad = zfp_decompress(Ac)
-            @test Ad == A
+            Adviews = zfp_decompress(view(Ac,:))
+            @test Ad == Adviews == A
         end
     end
 end
