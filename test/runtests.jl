@@ -9,8 +9,13 @@ using Test
             A = rand(T,sizes...)
             Ac = zfp_compress(A)
             Ad = zfp_decompress(Ac)
-            Adviews = zfp_decompress(view(Ac,:))
-            @test Ad == Adviews == A
+
+            A_view = reshape(view(A, :), size(A))
+            Ac_view = zfp_compress(A_view)
+            Ad_view = zfp_decompress(view(Ac,:))
+
+            @test Ac == Ac_view
+            @test Ad == Ad_view == A
         end
     end
 
