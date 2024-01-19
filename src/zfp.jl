@@ -57,7 +57,7 @@ end
 ZfpField(field::Ptr) = unsafe_load(Ptr{ZfpField}(field))
 
 """Pass a 1-D array into a zfp_field in C, in Julia only as Ptr{Cvoid}."""
-function zfp_field(A::Array{T,1}) where {T}
+function zfp_field(A::AbstractArray{T,1}) where {T}
     n = length(A)
     field = ccall((:zfp_field_1d, libzfp), Ptr{Cvoid},
         (Ptr{Cvoid}, Clong, Cuint), A, zfp_type(T), n)
@@ -67,7 +67,7 @@ function zfp_field(A::Array{T,1}) where {T}
 end
 
 """Pass a 2-D array into a zfp_field in C, in Julia only as Ptr{Cvoid}."""
-function zfp_field(A::Array{T,2}) where {T}
+function zfp_field(A::AbstractArray{T,2}) where {T}
     nx, ny = size(A)
     field = ccall((:zfp_field_2d, libzfp), Ptr{Cvoid},
         (Ptr{Cvoid}, Clong, Cuint, Cuint), A, zfp_type(T), nx, ny)
@@ -77,7 +77,7 @@ function zfp_field(A::Array{T,2}) where {T}
 end
 
 """Pass a 3-D array into a zfp_field in C, in Julia only as Ptr{Cvoid}."""
-function zfp_field(A::Array{T,3}) where {T}
+function zfp_field(A::AbstractArray{T,3}) where {T}
     nx, ny, nz = size(A)
     field = ccall((:zfp_field_3d, libzfp), Ptr{Cvoid},
         (Ptr{Cvoid}, Clong, Cuint, Cuint, Cuint), A, zfp_type(T), nx, ny, nz)
@@ -88,7 +88,7 @@ function zfp_field(A::Array{T,3}) where {T}
 end
 
 """Pass a 4-D array into a zfp_field in C, in Julia only as Ptr{Cvoid}."""
-function zfp_field(A::Array{T,4}) where {T}
+function zfp_field(A::AbstractArray{T,4}) where {T}
     nx, ny, nz, nw = size(A)
     field = ccall((:zfp_field_4d, libzfp), Ptr{Cvoid},
         (Ptr{Cvoid}, Clong, Cuint, Cuint, Cuint, Cuint), A, zfp_type(T), nx, ny, nz, nw)
