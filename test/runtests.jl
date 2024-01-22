@@ -30,6 +30,12 @@ using Test
             Ac = zfp_compress(A_view)
             Ad = zfp_decompress(Ac)
             @test A_view == Ad
+
+            # same array but collect the view, to check that exactly the same happens with/without view
+            A2 = collect(A_view)
+            Ac2 = zfp_compress(A2)
+            Ad2 = zfp_decompress(Ac2)
+            @test A2 == A_view == Ad2
         end
     end
 
