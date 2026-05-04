@@ -1,6 +1,8 @@
 using ZfpCompression
 using Test
 
+using ZfpCompression: zfp_promote, zfp_promote!, zfp_demote, zfp_demote!
+
 @testset "Lossless 1-4D for all types" begin
 
     for T in (Float32,Float64)
@@ -65,4 +67,30 @@ end
             end
         end
     end
+end
+
+@testset "promote/demote round-trip" begin
+    # exercise sizes that span the dims=4..0 fall-through (block sizes 256, 64, 16, 4, 1)
+    for n in (1, 3, 4, 5, 17, 100, 256, 257, 1000)
+        for T in (Int8, UInt8, Int16, UInt16)
+            A = rand(T, n)
+            P = zfp_promote(A)
+            @test P isa Vector{Int32}
+            @test length(P) == n
+            @test zfp_demote(T, P) == A
+        end
+    end
+
+    # multi-dimensional, shape preserved
+    for T in (Int8, UInt8, Int16, UInt16)
+        A = rand(T, 7, 9)
+        P = zfp_promote(A)
+        @test P isa Matrix{Int32}
+        @test size(P) == size(A)
+        @test zfp_demote(T, P) == A
+    end
+
+    # size mismatch throws
+    @test_throws DimensionMismatch zfp_promote!(zeros(Int32, 5), Int8[1,2,3,4])
+    @test_throws DimensionMismatch zfp_demote!(zeros(Int8, 5), zeros(Int32, 4))
 end

@@ -272,6 +272,61 @@ function zfp_stream_set_execution(stream::Ptr{Cvoid}, execution::Symbol)
     success == 0 && throw("Enabling $execution failed.")
 end
 
+# UTILITY FUNCTIONS: promote low-bit ints to Int32, demote Int32 to low-bit ints.
+# The underlying C functions process exactly 4^dims values per call; we tile the
+# array with the largest dims that fits, falling through to dims=0 (scalar).
+
+const _LowBitInt = Union{Int8, UInt8, Int16, UInt16}
+
+for (T, promote_name, demote_name) in (
+        (Int8,   :zfp_promote_int8_to_int32,   :zfp_demote_int32_to_int8),
+        (UInt8,  :zfp_promote_uint8_to_int32,  :zfp_demote_int32_to_uint8),
+        (Int16,  :zfp_promote_int16_to_int32,  :zfp_demote_int32_to_int16),
+        (UInt16, :zfp_promote_uint16_to_int32, :zfp_demote_int32_to_uint16))
+
+    @eval function zfp_promote!(dest::DenseArray{Int32}, src::DenseArray{$T})
+        size(dest) == size(src) || throw(DimensionMismatch(
+            "size(dest) = $(size(dest)) does not match size(src) = $(size(src))"))
+        n = length(src)
+        i = 0
+        for d in 4:-1:0
+            block = 1 << (2*d)
+            while i + block <= n
+                ccall(($(QuoteNode(promote_name)), libzfp), Cvoid,
+                    (Ptr{Int32}, Ptr{$T}, Cuint),
+                    pointer(dest, i+1), pointer(src, i+1), d)
+                i += block
+            end
+        end
+        return dest
+    end
+
+    @eval function zfp_demote!(dest::DenseArray{$T}, src::DenseArray{Int32})
+        size(dest) == size(src) || throw(DimensionMismatch(
+            "size(dest) = $(size(dest)) does not match size(src) = $(size(src))"))
+        n = length(src)
+        i = 0
+        for d in 4:-1:0
+            block = 1 << (2*d)
+            while i + block <= n
+                ccall(($(QuoteNode(demote_name)), libzfp), Cvoid,
+                    (Ptr{$T}, Ptr{Int32}, Cuint),
+                    pointer(dest, i+1), pointer(src, i+1), d)
+                i += block
+            end
+        end
+        return dest
+    end
+end
+
+function zfp_promote(src::AbstractArray{<:_LowBitInt})
+    zfp_promote!(similar(src, Int32), src)
+end
+
+function zfp_demote(::Type{T}, src::AbstractArray{Int32}) where {T<:_LowBitInt}
+    zfp_demote!(similar(src, T), src)
+end
+
 # COMPRESSION AND DECOMPRESSION
 """Low-level C call to run the compression."""
 function zfp_compress(stream::Ptr{Cvoid}, field::Ptr{Cvoid})
