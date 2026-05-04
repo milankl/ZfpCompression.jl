@@ -288,16 +288,34 @@ function zfp_compress(src::AbstractArray{T};
     nthreads::Int=1,
     kws...) where {T<:Union{Int32,Int64,Float32,Float64}}
 
+    dest = UInt8[]
+    return zfp_compress!(dest, src; write_header, nthreads, kws...)
+end
+
+"""
+    zfp_compress!(dest::Vector{UInt8}, src::AbstractArray; kws...)
+
+Compress `src` into `dest`. `dest` may be resized as needed to fit the compressed
+data. Same keyword arguments as `zfp_compress`.
+"""
+function zfp_compress!(dest::Vector{UInt8}, src::AbstractArray{T};
+                       write_header::Bool=true,
+                       nthreads::Int=1,
+                       kws...) where {T<:Union{Int32,Int64,Float32,Float64}}
+
     ndims = length(size(src))
     ndims in [1, 2, 3, 4] || throw(DimensionMismatch("Zfp compression only for 1-4D array."))
 
     zfpstream = zfp_stream(T, ndims; kws...)  # initialize the compression
     field = zfp_field(src)                  # turn src array into zfp field
 
-    # preallocate the compressed array
+    # ensure the destination buffer is large enough for the worst case
     bufsize = zfp_stream_maximum_size(zfpstream, field)
-    dest = Vector{UInt8}(undef, bufsize)             # allocate as UInt8
-    bitstream = stream_open(pointer(dest), bufsize)  # turn array into zfp pointer
+    if length(dest) < bufsize
+        resize!(dest, bufsize)
+    end
+
+    bitstream = stream_open(pointer(dest), length(dest))  # turn array into zfp pointer
     zfp_stream_set_bit_stream(zfpstream, bitstream)  # connect bitstream pointer to zfp struct
     zfp_stream_rewind(zfpstream)
 
@@ -322,7 +340,7 @@ function zfp_compress(src::AbstractArray{T};
     zfp_stream_close(zfpstream)
     stream_close(bitstream)
 
-    return dest[1:compressed_size]
+    return resize!(dest, compressed_size)
 end
 
 function zfp_decompress!(dest::AbstractArray{T},
