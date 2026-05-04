@@ -156,17 +156,11 @@ function zfp_stream_set_reversible(stream::Ptr{Cvoid})
     ccall((:zfp_stream_set_reversible, libzfp), Cvoid, (Ptr{Cvoid},), stream)
 end
 
-"""Initialize a zfp stream C struct holding the compression settings.
-    Only a Ptr{Cvoid} is returned to Julia."""
-function zfp_stream(::Type{T},
-    ndims::Int;
-    tol::Real=0,
-    precision::Real=0,
-    rate::Int=0) where {T}
+"""Apply the compression mode (tol > precision > rate > lossless) to an
+already-open zfp stream."""
+function zfp_stream_set_mode!(stream::Ptr{Cvoid}, ::Type{T}, ndims::Int;
+    tol::Real=0, precision::Real=0, rate::Int=0) where {T}
 
-    stream = zfp_stream_open()
-
-    # set the compression options
     if tol > 0
         zfp_stream_set_accuracy(stream, tol)
     elseif precision > 0
@@ -178,7 +172,14 @@ function zfp_stream(::Type{T},
     else  # lossless
         zfp_stream_set_reversible(stream)
     end
+    return stream
+end
 
+"""Initialize a zfp stream C struct holding the compression settings.
+    Only a Ptr{Cvoid} is returned to Julia."""
+function zfp_stream(::Type{T}, ndims::Int; kws...) where {T}
+    stream = zfp_stream_open()
+    zfp_stream_set_mode!(stream, T, ndims; kws...)
     return stream
 end
 
@@ -405,14 +406,23 @@ function zfp_decompress!(dest::AbstractArray{T},
     ndims = length(size(dest))
     ndims in [1, 2, 3, 4] || throw(DimensionMismatch("Zfp compression only for 1-4D array."))
 
-    zfpstream = zfp_stream(T, ndims; kws...)    # initialize decompression
-    field = zfp_field(dest)             # turn destination array into zfp pointer
+    bitstream = stream_open(pointer(src), length(src))
+    zfpstream = zfp_stream_open(bitstream)
 
-    # declare src as the bitstream to decompress and connect to zfp struct
-    bufsize = zfp_stream_maximum_size(zfpstream, field)
-    bitstream = stream_open(pointer(src), bufsize)
-    zfp_stream_set_bit_stream(zfpstream, bitstream)
-    zfp_stream_rewind(zfpstream)
+    # Opportunistically read a header. If src wasn't written with one the magic
+    # bits won't match, so rewind and configure from kwargs instead. Build the
+    # field after the probe — a failed header read may have clobbered it.
+    probe = zfp_field_alloc()
+    if zfp_read_header(zfpstream, probe, HEADER_FULL) != 0
+        # The header overwrites field's data pointer, so restore it.
+        field = probe
+        zfp_field_set_pointer(field, pointer(dest))
+    else
+        zfp_field_free(probe)
+        zfp_stream_rewind(zfpstream)
+        field = zfp_field(dest)             # turn destination array into zfp pointer
+        zfp_stream_set_mode!(zfpstream, T, ndims; kws...)    # initialize decompression
+    end
 
     # perform decompression
     compressed_size = zfp_decompress(zfpstream, field)
@@ -427,34 +437,39 @@ function zfp_decompress!(dest::AbstractArray{T},
     return nothing
 end
 
-function zfp_decompress(src::AbstractVector{UInt8})
+"""
+    zfp_decompress_allocate(src::AbstractVector{UInt8}) -> Array
 
-    field = zfp_field_alloc()
+Read the zfp header in `src` and allocate an uninitialized `Array{T, N}` of the
+right element type and shape to hold the decompressed data. Use with
+`zfp_decompress!(dest, src)` to fill the buffer.
+"""
+function zfp_decompress_allocate(src::AbstractVector{UInt8})
     bitstream = stream_open(pointer(src), length(src))
     zfpstream = zfp_stream_open(bitstream)
+    field = zfp_field_alloc()
+
     if zfp_read_header(zfpstream, field, HEADER_FULL) == 0
+        zfp_field_free(field)
+        zfp_stream_close(zfpstream)
+        stream_close(bitstream)
         throw(error("Reading header failed."))
     end
 
-    # read header via ccalls
     T = zfp_field_type(field)
     ndims = zfp_field_dimensionality(field)
-
-    # convert field pointer into Julia struct to access nx,ny,nz,nw
     ZF = ZfpField(field)
     n = filter(!=(0), (ZF.nx, ZF.ny, ZF.nz, ZF.nw))
 
-    output = Array{T,ndims}(undef, n...)
-    zfp_field_set_pointer(field, pointer(output))
-
-    compressed_size = zfp_decompress(zfpstream, field)
-
-    # free and close
     zfp_field_free(field)
     zfp_stream_close(zfpstream)
     stream_close(bitstream)
 
-    # check for failure
-    compressed_size == 0 && throw(error("Zfp decompression failed."))
+    return Array{T,ndims}(undef, n...)
+end
+
+function zfp_decompress(src::AbstractVector{UInt8})
+    output = zfp_decompress_allocate(src)
+    zfp_decompress!(output, src)
     return output
 end

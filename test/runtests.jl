@@ -1,7 +1,7 @@
 using ZfpCompression
 using Test
 
-using ZfpCompression: zfp_promote, zfp_promote!, zfp_demote, zfp_demote!
+using ZfpCompression: zfp_promote, zfp_promote!, zfp_demote, zfp_demote!, zfp_decompress_allocate
 
 @testset "Lossless 1-4D for all types" begin
 
@@ -67,6 +67,34 @@ end
             end
         end
     end
+end
+
+@testset "zfp_decompress_allocate" begin
+    for T in (Float32, Float64, Int32, Int64)
+        for sizes in [(100,), (50, 30), (10, 10, 10), (5, 5, 5, 5)]
+            A = rand(T, sizes...)
+            Ac = zfp_compress(A)
+
+            # right type and shape from the header alone
+            dest = zfp_decompress_allocate(Ac)
+            @test dest isa Array{T, length(sizes)}
+            @test size(dest) == sizes
+
+            # zfp_decompress! auto-detects the embedded header and fills the buffer
+            zfp_decompress!(dest, Ac)
+            @test dest == A
+
+            # buffer can be reused for a different payload of the same shape/type
+            B = rand(T, sizes...)
+            Bc = zfp_compress(B)
+            zfp_decompress!(dest, Bc)
+            @test dest == B
+        end
+    end
+
+    # bogus input has no valid header
+    bogus = rand(UInt8, 64)
+    @test_throws ErrorException zfp_decompress_allocate(bogus)
 end
 
 @testset "promote/demote round-trip" begin
