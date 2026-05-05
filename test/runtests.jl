@@ -1,7 +1,8 @@
 using ZfpCompression
 using Test
 
-using ZfpCompression: zfp_promote, zfp_promote!, zfp_demote, zfp_demote!, zfp_decompress_allocate
+using ZfpCompression: zfp_promote, zfp_promote!, zfp_demote, zfp_demote!, zfp_decompress_allocate,
+    zfp_clamp_int
 
 @testset "Lossless 1-4D for all types" begin
 
@@ -121,4 +122,27 @@ end
     # size mismatch throws
     @test_throws DimensionMismatch zfp_promote!(zeros(Int32, 5), Int8[1,2,3,4])
     @test_throws DimensionMismatch zfp_demote!(zeros(Int8, 5), zeros(Int32, 4))
+end
+
+@testset "zfp_clamp_int" begin
+    # In-range values pass through untouched and was_clamped is false.
+    for T in (Int32, Int64, UInt32, UInt64)
+        out, was_clamped = zfp_clamp_int(T[0, 1, 100])
+        @test out == T[0, 1, 100]
+        @test !was_clamped
+    end
+
+    # Signed: clamps both sides to ±(2^30-1) / ±(2^62-1).
+    s32, c32 = zfp_clamp_int(Int32[typemin(Int32), -10, 0, 10, typemax(Int32)])
+    @test s32 == Int32[-(Int32(2)^30 - 1), -10, 0, 10, Int32(2)^30 - 1]
+    @test c32
+
+    s64, c64 = zfp_clamp_int(Int64[typemin(Int64), 0, typemax(Int64)])
+    @test s64 == Int64[-(Int64(2)^62 - 1), 0, Int64(2)^62 - 1]
+    @test c64
+
+    # Unsigned: lower bound is 0, no negative clamp path.
+    u32, cu32 = zfp_clamp_int(UInt32[0, 5, typemax(UInt32)])
+    @test u32 == UInt32[0, 5, UInt32(2)^30 - 1]
+    @test cu32
 end

@@ -328,6 +328,57 @@ function zfp_demote(::Type{T}, src::AbstractArray{Int32}) where {T<:_LowBitInt}
     zfp_demote!(similar(src, T), src)
 end
 
+# UTILITY: clamp 32/64-bit integer arrays into the range zfp's integer
+# compressor can faithfully represent. zfp requires |x| < 2^30 for the 32-bit
+# path and |x| < 2^62 for the 64-bit path; values outside the range get
+# truncated by the compressor, so callers should clamp first if they want
+# defined behavior. See:
+# https://zfp.readthedocs.io/en/release1.0.1/faq.html#q-int32
+const _ZfpClampInt = Union{Int32, Int64, UInt32, UInt64}
+
+zfp_max_magnitude(::Type{Int32})  =  Int32(2^30 - 1)
+zfp_max_magnitude(::Type{Int64})  =  Int64(2^62 - 1)
+zfp_max_magnitude(::Type{UInt32}) = UInt32(2^30 - 1)
+zfp_max_magnitude(::Type{UInt64}) = UInt64(2^62 - 1)
+
+"""
+    zfp_clamp_int!(arr::AbstractArray{<:Union{Int32,Int64,UInt32,UInt64}}) -> Bool
+
+Clamp every element of `arr` into the zfp-safe range in place: signed types
+clamp to `[-2^30+1, 2^30-1]` (resp. `±2^62-1` for 64-bit), unsigned types to
+`[0, 2^30-1]` / `[0, 2^62-1]`. Returns `true` if any element was clamped.
+"""
+function zfp_clamp_int!(arr::AbstractArray{T}) where {T <: _ZfpClampInt}
+    hi = zfp_max_magnitude(T)
+    lo = T <: Signed ? -hi : zero(T)
+    clamped = false
+
+    @inbounds for i in eachindex(arr)
+        x = arr[i]
+        if x > hi
+            arr[i] = hi
+            clamped = true
+        elseif x < lo
+            arr[i] = lo
+            clamped = true
+        end
+    end
+
+    return clamped
+end
+
+"""
+    zfp_clamp_int(arr) -> (clamped_copy, was_clamped)
+
+Allocating variant of [`zfp_clamp_int!`](@ref): returns a fresh array clamped
+into the zfp-safe range alongside a flag indicating whether anything was
+actually clamped.
+"""
+function zfp_clamp_int(arr::AbstractArray{T}) where {T <: _ZfpClampInt}
+    out = copy(arr)
+    return out, zfp_clamp_int!(out)
+end
+
 # COMPRESSION AND DECOMPRESSION
 """Low-level C call to run the compression."""
 function zfp_compress(stream::Ptr{Cvoid}, field::Ptr{Cvoid})
