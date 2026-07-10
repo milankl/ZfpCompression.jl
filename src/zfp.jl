@@ -1,5 +1,16 @@
 using zfp_jll
 
+macro gc_safe(expr)
+    quote
+        gc_state = ccall(:jl_gc_safe_enter, Int8, ())
+        try
+            $(esc(expr))
+        finally
+            ccall(:jl_gc_safe_leave, Cvoid, (Int8,), gc_state)
+        end
+    end
+end
+
 # zfp constants
 const HEADER_MAGIC = 1
 const HEADER_META = 2
@@ -382,12 +393,12 @@ end
 # COMPRESSION AND DECOMPRESSION
 """Low-level C call to run the compression."""
 function zfp_compress(stream::Ptr{Cvoid}, field::Ptr{Cvoid})
-    ccall((:zfp_compress, libzfp), Int, (Ptr{Cvoid}, Ptr{Cvoid}), stream, field)
+    @gc_safe ccall((:zfp_compress, libzfp), Int, (Ptr{Cvoid}, Ptr{Cvoid}), stream, field)
 end
 
 """Low-level C call to run the decompression."""
 function zfp_decompress(stream::Ptr{Cvoid}, field::Ptr{Cvoid})
-    ccall((:zfp_decompress, libzfp), Int, (Ptr{Cvoid}, Ptr{Cvoid}), stream, field)
+    @gc_safe ccall((:zfp_decompress, libzfp), Int, (Ptr{Cvoid}, Ptr{Cvoid}), stream, field)
 end
 
 function zfp_compress(src::AbstractArray{T};
