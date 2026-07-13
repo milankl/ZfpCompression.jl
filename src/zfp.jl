@@ -48,7 +48,7 @@ function zfp_type(i::Int)
 end
 
 """Size of zfp types (Int32,Int64,Float32,Float64) in bytes."""
-zfp_type_size(i::Int64) = ccall((:zfp_type_size, libzfp), Int64, (Int64,), i)
+zfp_type_size(i::Int64) = ccall((:zfp_type_size, libzfp), Csize_t, (Cint,), i)
 zfp_type_size(::Type{T}) where {T} = zfp_type_size(zfp_type(T))
 
 # READ IN ARRAYS
@@ -71,9 +71,9 @@ ZfpField(field::Ptr) = unsafe_load(Ptr{ZfpField}(field))
 function zfp_field(A::AbstractArray{T,1}) where {T}
     n = length(A)
     field = ccall((:zfp_field_1d, libzfp), Ptr{Cvoid},
-        (Ptr{Cvoid}, Clong, Cuint), A, zfp_type(T), n)
+        (Ptr{Cvoid}, Cint, Csize_t), A, zfp_type(T), n)
     sx = strides(A)[1]
-    ccall((:zfp_field_set_stride_1d, libzfp), Cvoid, (Ptr{Cvoid}, Clong), field, sx)
+    ccall((:zfp_field_set_stride_1d, libzfp), Cvoid, (Ptr{Cvoid}, Cptrdiff_t), field, sx)
     return field
 end
 
@@ -81,9 +81,10 @@ end
 function zfp_field(A::AbstractArray{T,2}) where {T}
     nx, ny = size(A)
     field = ccall((:zfp_field_2d, libzfp), Ptr{Cvoid},
-        (Ptr{Cvoid}, Clong, Cuint, Cuint), A, zfp_type(T), nx, ny)
+        (Ptr{Cvoid}, Cint, Csize_t, Csize_t), A, zfp_type(T), nx, ny)
     sx, sy = strides(A)
-    ccall((:zfp_field_set_stride_2d, libzfp), Cvoid, (Ptr{Cvoid}, Clong, Clong), field, sx, sy)
+    ccall((:zfp_field_set_stride_2d, libzfp), Cvoid, (Ptr{Cvoid}, Cptrdiff_t, Cptrdiff_t),
+        field, sx, sy)
     return field
 end
 
@@ -91,9 +92,10 @@ end
 function zfp_field(A::AbstractArray{T,3}) where {T}
     nx, ny, nz = size(A)
     field = ccall((:zfp_field_3d, libzfp), Ptr{Cvoid},
-        (Ptr{Cvoid}, Clong, Cuint, Cuint, Cuint), A, zfp_type(T), nx, ny, nz)
+        (Ptr{Cvoid}, Cint, Csize_t, Csize_t, Csize_t), A, zfp_type(T), nx, ny, nz)
     sx, sy, sz = strides(A)
-    ccall((:zfp_field_set_stride_3d, libzfp), Cvoid, (Ptr{Cvoid}, Clong, Clong, Clong),
+    ccall((:zfp_field_set_stride_3d, libzfp), Cvoid,
+        (Ptr{Cvoid}, Cptrdiff_t, Cptrdiff_t, Cptrdiff_t),
         field, sx, sy, sz)
     return field
 end
@@ -102,9 +104,10 @@ end
 function zfp_field(A::AbstractArray{T,4}) where {T}
     nx, ny, nz, nw = size(A)
     field = ccall((:zfp_field_4d, libzfp), Ptr{Cvoid},
-        (Ptr{Cvoid}, Clong, Cuint, Cuint, Cuint, Cuint), A, zfp_type(T), nx, ny, nz, nw)
+        (Ptr{Cvoid}, Cint, Csize_t, Csize_t, Csize_t, Csize_t), A, zfp_type(T), nx, ny, nz, nw)
     sx, sy, sz, sw = strides(A)
-    ccall((:zfp_field_set_stride_4d, libzfp), Cvoid, (Ptr{Cvoid}, Clong, Clong, Clong, Clong),
+    ccall((:zfp_field_set_stride_4d, libzfp), Cvoid,
+        (Ptr{Cvoid}, Cptrdiff_t, Cptrdiff_t, Cptrdiff_t, Cptrdiff_t),
         field, sx, sy, sz, sw)
     return field
 end
@@ -144,10 +147,13 @@ function zfp_stream_open(bitstream::Ptr{Cvoid})
 end
 
 """Set bitrate (=bits per value) to set the compression rate directly.
-Should not be larger than the bits per value of the uncompressed array."""
-function zfp_stream_set_rate(stream::Ptr{Cvoid}, rate::Real, type::Type, dims::Integer)
+Should not be larger than the bits per value of the uncompressed array.
+`align` word-aligns blocks, e.g. for write random access."""
+function zfp_stream_set_rate(stream::Ptr{Cvoid}, rate::Real, type::Type, dims::Integer,
+                             align::Bool=false)
     ccall((:zfp_stream_set_rate, libzfp), Cdouble,
-        (Ptr{Cvoid}, Cdouble, Cuint, Cuint), stream, Float64(rate), zfp_type(type), dims)
+        (Ptr{Cvoid}, Cdouble, Cuint, Cuint, Cint),
+        stream, Float64(rate), zfp_type(type), dims, align)
 end
 
 """Set the precision (≈ mantissa bits per value) for compression."""
@@ -170,7 +176,7 @@ end
 """Apply the compression mode (tol > precision > rate > lossless) to an
 already-open zfp stream."""
 function zfp_stream_set_mode!(stream::Ptr{Cvoid}, ::Type{T}, ndims::Int;
-    tol::Real=0, precision::Real=0, rate::Int=0) where {T}
+    tol::Real=0, precision::Real=0, rate::Real=0) where {T}
 
     if tol > 0
         zfp_stream_set_accuracy(stream, tol)
