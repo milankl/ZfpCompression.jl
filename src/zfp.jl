@@ -218,6 +218,16 @@ function stream_open(buffer::Ptr, bufsize::Int)
     ccall((:stream_open, libzfp), Ptr{Cvoid}, (Ptr{Cvoid}, Int), buffer, bufsize)
 end
 
+"""Open a byte buffer into a bitstream, checking if the buffer is not
+strided. zfp reads the buffer through a raw pointer so it must be contiguous."""
+function stream_open(buffer::AbstractVector{UInt8})
+    if !(buffer isa StridedVector) || stride(buffer, 1) != 1
+        throw(ArgumentError("The compressed buffer must be contiguous."))
+    end
+
+    return stream_open(pointer(buffer), length(buffer))
+end
+
 """Close the compressed bitstream."""
 function stream_close(bitstream::Ptr{Cvoid})
     ccall((:stream_close, libzfp), Cvoid, (Ptr{Cvoid},), bitstream)
@@ -235,7 +245,7 @@ function zfp_stream_rewind(stream::Ptr{Cvoid})
     ccall((:zfp_stream_rewind, libzfp), Cvoid, (Ptr{Cvoid},), stream)
 end
 
-"""Rewind the data stream."""
+"""Flush the data stream, i.e. write any buffered bits out to it."""
 function zfp_stream_flush(stream::Ptr{Cvoid})
     ccall((:zfp_stream_flush, libzfp), Cvoid, (Ptr{Cvoid},), stream)
 end
@@ -307,13 +317,15 @@ for (T, promote_name, demote_name) in (
             "size(dest) = $(size(dest)) does not match size(src) = $(size(src))"))
         n = length(src)
         i = 0
-        for d in 4:-1:0
-            block = 1 << (2*d)
-            while i + block <= n
-                ccall(($(QuoteNode(promote_name)), libzfp), Cvoid,
-                    (Ptr{Int32}, Ptr{$T}, Cuint),
-                    pointer(dest, i+1), pointer(src, i+1), d)
-                i += block
+        GC.@preserve dest src begin
+            for d in 4:-1:0
+                block = 1 << (2*d)
+                while i + block <= n
+                    ccall(($(QuoteNode(promote_name)), libzfp), Cvoid,
+                        (Ptr{Int32}, Ptr{$T}, Cuint),
+                        pointer(dest, i+1), pointer(src, i+1), d)
+                    i += block
+                end
             end
         end
         return dest
@@ -324,13 +336,15 @@ for (T, promote_name, demote_name) in (
             "size(dest) = $(size(dest)) does not match size(src) = $(size(src))"))
         n = length(src)
         i = 0
-        for d in 4:-1:0
-            block = 1 << (2*d)
-            while i + block <= n
-                ccall(($(QuoteNode(demote_name)), libzfp), Cvoid,
-                    (Ptr{$T}, Ptr{Int32}, Cuint),
-                    pointer(dest, i+1), pointer(src, i+1), d)
-                i += block
+        GC.@preserve dest src begin
+            for d in 4:-1:0
+                block = 1 << (2*d)
+                while i + block <= n
+                    ccall(($(QuoteNode(demote_name)), libzfp), Cvoid,
+                        (Ptr{$T}, Ptr{Int32}, Cuint),
+                        pointer(dest, i+1), pointer(src, i+1), d)
+                    i += block
+                end
             end
         end
         return dest
@@ -430,39 +444,56 @@ function zfp_compress!(dest::Vector{UInt8}, src::AbstractArray{T};
     ndims = length(size(src))
     ndims in [1, 2, 3, 4] || throw(DimensionMismatch("Zfp compression only for 1-4D array."))
 
-    zfpstream = zfp_stream(T, ndims; kws...)  # initialize the compression
-    field = zfp_field(src)                  # turn src array into zfp field
+    zfpstream = Ptr{Cvoid}(C_NULL)
+    field = Ptr{Cvoid}(C_NULL)
+    bitstream = Ptr{Cvoid}(C_NULL)
 
-    # ensure the destination buffer is large enough for the worst case
-    bufsize = zfp_stream_maximum_size(zfpstream, field)
-    if length(dest) < bufsize
-        resize!(dest, bufsize)
+    # src and dest are only reachable through raw pointers held by the C structs
+    # below, so root them for as long as zfp may dereference them.
+    compressed_size = GC.@preserve src dest try
+        zfpstream = zfp_stream(T, ndims; kws...)  # initialize the compression
+        field = zfp_field(src)                  # turn src array into zfp field
+
+        # ensure the destination buffer is large enough for the worst case
+        bufsize = zfp_stream_maximum_size(zfpstream, field)
+        if length(dest) < bufsize
+            resize!(dest, bufsize)
+        end
+
+        bitstream = stream_open(dest)  # turn array into zfp pointer
+        zfp_stream_set_bit_stream(zfpstream, bitstream)  # connect bitstream pointer to zfp struct
+        zfp_stream_rewind(zfpstream)
+
+        # write header
+        if write_header && zfp_write_header(zfpstream, field, HEADER_FULL) == 0
+            throw(error("Writing header failed."))
+        end
+
+        # Enable OpenMP multi-threading
+        if nthreads > 1
+            zfp_stream_set_omp_threads(zfpstream, nthreads)
+        end
+
+        # perform compression
+        success = zfp_compress(zfpstream, field)
+        if success == 0
+            throw(error("Zfp compression failed."))
+        end
+
+        zfp_stream_flush(zfpstream)
+        zfp_stream_compressed_size(zfpstream)
+    finally
+        # free and close, also on the error paths above
+        if field != C_NULL
+            zfp_field_free(field)
+        end
+        if zfpstream != C_NULL
+            zfp_stream_close(zfpstream)
+        end
+        if bitstream != C_NULL
+            stream_close(bitstream)
+        end
     end
-
-    bitstream = stream_open(pointer(dest), length(dest))  # turn array into zfp pointer
-    zfp_stream_set_bit_stream(zfpstream, bitstream)  # connect bitstream pointer to zfp struct
-    zfp_stream_rewind(zfpstream)
-
-    # write header
-    if write_header && zfp_write_header(zfpstream, field, HEADER_FULL) == 0
-        throw(error("Writing header failed."))
-    end
-
-    # Enable OpenMP multi-threading
-    if nthreads > 1
-        zfp_stream_set_omp_threads(zfpstream, nthreads)
-    end
-
-    # perform compression
-    success = zfp_compress(zfpstream, field)
-    success == 0 && throw(error("Zfp compression failed."))
-    zfp_stream_flush(zfpstream)
-    compressed_size = zfp_stream_compressed_size(zfpstream)
-
-    # free and close
-    zfp_field_free(field)
-    zfp_stream_close(zfpstream)
-    stream_close(bitstream)
 
     return resize!(dest, compressed_size)
 end
@@ -474,31 +505,46 @@ function zfp_decompress!(dest::AbstractArray{T},
     ndims = length(size(dest))
     ndims in [1, 2, 3, 4] || throw(DimensionMismatch("Zfp compression only for 1-4D array."))
 
-    bitstream = stream_open(pointer(src), length(src))
-    zfpstream = zfp_stream_open(bitstream)
+    # src and dest are only reachable through raw pointers held by the C structs
+    # below, so root them for as long as zfp may dereference them.
+    compressed_size = GC.@preserve src dest begin
+        bitstream = stream_open(src)
+        zfpstream = zfp_stream_open(bitstream)
 
-    # Opportunistically read a header. If src wasn't written with one the magic
-    # bits won't match, so rewind and configure from kwargs instead. Build the
-    # field after the probe — a failed header read may have clobbered it.
-    probe = zfp_field_alloc()
-    if zfp_read_header(zfpstream, probe, HEADER_FULL) != 0
-        # The header overwrites field's data pointer, so restore it.
-        field = probe
-        zfp_field_set_pointer(field, pointer(dest))
-    else
-        zfp_field_free(probe)
-        zfp_stream_rewind(zfpstream)
-        field = zfp_field(dest)             # turn destination array into zfp pointer
-        zfp_stream_set_mode!(zfpstream, T, ndims; kws...)    # initialize decompression
+        # Opportunistically read a header. If src wasn't written with one the magic
+        # bits won't match, so rewind and configure from kwargs instead. Build the
+        # field after the probe — a failed header read may have clobbered it.
+        probe = zfp_field_alloc()
+        if zfp_read_header(zfpstream, probe, HEADER_FULL) != 0
+            # zfp writes header_type × header_dims values through dest's pointer,
+            # so validate both against dest before decompressing.
+            htype = zfp_field_type(probe)
+            ZF = ZfpField(probe)
+            hsize = map(Int, filter(!=(0), (ZF.nx, ZF.ny, ZF.nz, ZF.nw)))
+            zfp_field_free(probe)
+            if htype != T || hsize != size(dest)
+                zfp_stream_close(zfpstream)
+                stream_close(bitstream)
+                throw(DimensionMismatch("zfp header describes a size-$hsize array" *
+                    " of $htype, but dest is a size-$(size(dest)) array of $T"))
+            end
+        else
+            zfp_field_free(probe)
+            zfp_stream_rewind(zfpstream)
+            zfp_stream_set_mode!(zfpstream, T, ndims; kws...)    # initialize decompression
+        end
+        field = zfp_field(dest)  # sets dest's pointer and strides on the field
+
+        # perform decompression
+        nbytes = zfp_decompress(zfpstream, field)
+
+        # free and close
+        zfp_field_free(field)
+        zfp_stream_close(zfpstream)
+        stream_close(bitstream)
+
+        nbytes
     end
-
-    # perform decompression
-    compressed_size = zfp_decompress(zfpstream, field)
-
-    # free and close
-    zfp_field_free(field)
-    zfp_stream_close(zfpstream)
-    stream_close(bitstream)
 
     # check for failure
     compressed_size == 0 && throw(error("Zfp decompression failed."))
@@ -513,25 +559,30 @@ right element type and shape to hold the decompressed data. Use with
 `zfp_decompress!(dest, src)` to fill the buffer.
 """
 function zfp_decompress_allocate(src::AbstractVector{UInt8})
-    bitstream = stream_open(pointer(src), length(src))
-    zfpstream = zfp_stream_open(bitstream)
-    field = zfp_field_alloc()
+    # The bitstream holds a raw pointer into src, so root src across the reads
+    T, ndims, n = GC.@preserve src begin
+        bitstream = stream_open(src)
+        zfpstream = zfp_stream_open(bitstream)
+        field = zfp_field_alloc()
 
-    if zfp_read_header(zfpstream, field, HEADER_FULL) == 0
+        if zfp_read_header(zfpstream, field, HEADER_FULL) == 0
+            zfp_field_free(field)
+            zfp_stream_close(zfpstream)
+            stream_close(bitstream)
+            throw(error("Reading header failed."))
+        end
+
+        htype = zfp_field_type(field)
+        hdims = zfp_field_dimensionality(field)
+        ZF = ZfpField(field)
+        hn = filter(!=(0), (ZF.nx, ZF.ny, ZF.nz, ZF.nw))
+
         zfp_field_free(field)
         zfp_stream_close(zfpstream)
         stream_close(bitstream)
-        throw(error("Reading header failed."))
+
+        (htype, hdims, hn)
     end
-
-    T = zfp_field_type(field)
-    ndims = zfp_field_dimensionality(field)
-    ZF = ZfpField(field)
-    n = filter(!=(0), (ZF.nx, ZF.ny, ZF.nz, ZF.nw))
-
-    zfp_field_free(field)
-    zfp_stream_close(zfpstream)
-    stream_close(bitstream)
 
     return Array{T,ndims}(undef, n...)
 end

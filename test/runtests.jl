@@ -96,6 +96,32 @@ end
     # bogus input has no valid header
     bogus = rand(UInt8, 64)
     @test_throws ErrorException zfp_decompress_allocate(bogus)
+
+    # zfp_decompress! validates dest against the header
+    A = rand(Float64, 10)
+    Ac = zfp_compress(A)
+    # wrong element type
+    @test_throws DimensionMismatch zfp_decompress!(zeros(Float32, 10), Ac)
+    # wrong length
+    @test_throws DimensionMismatch zfp_decompress!(zeros(Float64, 2), Ac)
+    # wrong dimensionality
+    @test_throws DimensionMismatch zfp_decompress!(zeros(Float64, 5, 2), Ac)
+
+    # strided dest views get their strides respected in the header path
+    B = rand(Float64, 50, 50)
+    Bc = zfp_compress(B)
+    parent = zeros(Float64, 100, 100)
+    dest_view = @view parent[1:2:100, 1:2:100]
+    zfp_decompress!(dest_view, Bc)
+    @test dest_view == B
+
+    # a non-contiguous compressed buffer would be read as the wrong bytes
+    src_view = @view Ac[1:2:length(Ac)]
+    @test_throws ArgumentError zfp_decompress(src_view)
+    @test_throws ArgumentError zfp_decompress_allocate(src_view)
+    @test_throws ArgumentError zfp_decompress!(zeros(Float64, 10), src_view)
+    # contiguous views are still fine
+    @test zfp_decompress(@view Ac[:]) == A
 end
 
 @testset "promote/demote round-trip" begin
