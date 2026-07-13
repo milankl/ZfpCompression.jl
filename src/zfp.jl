@@ -44,7 +44,7 @@ function zfp_type(i::Int)
     i == 2 && return Int64
     i == 3 && return Float32
     i == 4 && return Float64
-    throw(TypeError())
+    throw(ArgumentError("Unsupported zfp type id $i."))
 end
 
 """Size of zfp types (Int32,Int64,Float32,Float64) in bytes."""
@@ -263,7 +263,7 @@ end
 function zfp_stream_set_omp_threads(stream::Ptr{Cvoid}, nthreads::Integer)
     success = ccall((:zfp_stream_set_omp_threads, libzfp), Cuint,
         (Ptr{Cvoid}, Cuint), stream, UInt(nthreads))
-    success == 0 && throw("Enabling OpenMP failed.")
+    success == 0 && throw(ErrorException("Enabling OpenMP failed."))
 end
 
 """Return the current execution policy (serial/OpenMP/CUDA)."""
@@ -279,15 +279,15 @@ function zfp_stream_set_execution(stream::Ptr{Cvoid}, execution::Symbol)
         exec_policy = ZfpExecPolicy(1)
     elseif execution == :cuda
         # exec_policy = ZfpExecPolicy(2)
-        throw("CUDA currently unsupported for ZfpCompression.jl.")
+        throw(ArgumentError("CUDA currently unsupported for ZfpCompression.jl."))
     else
-        throw("Execution $execution unsupported.")
+        throw(ArgumentError("Execution $execution unsupported."))
     end
 
     success = ccall((:zfp_stream_set_execution, libzfp), Int,
         (Ptr{Cvoid}, ZfpExecPolicy), stream, exec_policy)
 
-    success == 0 && throw("Enabling $execution failed.")
+    success == 0 && throw(ErrorException("Enabling $execution failed."))
 end
 
 # UTILITY FUNCTIONS: promote low-bit ints to Int32, demote Int32 to low-bit ints.
