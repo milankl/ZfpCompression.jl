@@ -3,7 +3,7 @@
 
 Julia bindings for the data compression library [zfp](https://github.com/LLNL/zfp) v1.0,
 written by P Lindstrom ([@lindstro](https://github.com/lindstro)).
-From the [zfp documentation](https://zfp.readthedocs.io/en/release0.5.5/):
+From the [zfp documentation](https://zfp.readthedocs.io/en/):
 
 *zfp is an open source library for compressed numerical arrays that support high
 throughput read and write random access. To achieve high compression ratios, zfp
@@ -57,13 +57,25 @@ as lossy compression parameters (see below). This header can be deactivated with
 julia> Ac = zfp_compress(A,write_header=false)
 ```
 
-A compressed array (with header) can be decompressed as
+You can write the compressed data into a preallocated `Vector{UInt8}` buffer
+too, but note that the buffer will be resized if necessary:
+```julia
+julia> Ac = Vector{UInt8}(undef, 1000)
+julia> zfp_compress!(Ac, A)
+```
 
+A compressed array (with header) can be decompressed as
 ```julia
 julia> Ad = zfp_decompress(Ac)
 ```
 
-Alternatively, the decompression of header-less compressed arrays can be performed
+Or into a preallocated buffer:
+```julia
+julia> Ad = zfp_decompress_allocate(Ac)
+julia> zfp_decompress!(Ad, Ac)
+```
+
+The decompression of header-less compressed arrays can also be performed
 into an existing array (with same type, size and dimensions as the uncompressed array)
 
 ```julia
@@ -121,6 +133,28 @@ parameters also for `zfp_decompress!`. Otherwise the decompressed array is flawe
 julia> A2 = similar(A)
 julia> zfp_decompress!(A2,Ac,tol=1e-3)
 ```
+
+### Integer compression
+
+ZFP only has native support for 32/64 bit integers. If you want to compress 8 or
+16 bit integer arrays you should first call `zfp_promote()` (or its mutating
+counterpart `zfp_promote!()`) to convert the array to an int32 array. This is
+[recommended by
+ZFP](https://zfp.readthedocs.io/en/release1.0.1/faq.html#q-integer) for better
+compression compared to just casting to int32. You will need to reverse the
+promotion by calling `zfp_demote()`/`zfp_demote!()` after decompression:
+```julia
+julia> A_int32 = zfp_promote(A_int8);
+julia> Ac = zfp_compress(A_int32);
+julia> A2 = zfp_demote(Int8, zfp_decompress(Ac))
+```
+
+When compressing 32/64 bit integer arrays be aware that ZFP does not allow
+values [exceeding a magnitude of 2^30 and 2^62
+respectively](https://zfp.readthedocs.io/en/release1.0.1/faq.html#q-int32). How
+these values should be replaced is up to you, but one option is to use
+`zfp_clamp_int()`/`zfp_clamp_int!()` to clamp the values to the lowest/highest
+valid value.
 
 ## OpenMP multi-threading
 

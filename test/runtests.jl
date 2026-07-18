@@ -1,6 +1,9 @@
 using ZfpCompression
 using Test
 
+using ZfpCompression: zfp_promote, zfp_promote!, zfp_demote, zfp_demote!, zfp_decompress_allocate,
+    zfp_clamp_int
+
 @testset "Lossless 1-4D for all types" begin
 
     for T in (Float32,Float64)
@@ -65,4 +68,107 @@ end
             end
         end
     end
+end
+
+@testset "zfp_decompress_allocate" begin
+    for T in (Float32, Float64, Int32, Int64)
+        for sizes in [(100,), (50, 30), (10, 10, 10), (5, 5, 5, 5)]
+            A = rand(T, sizes...)
+            Ac = zfp_compress(A)
+
+            # right type and shape from the header alone
+            dest = zfp_decompress_allocate(Ac)
+            @test dest isa Array{T, length(sizes)}
+            @test size(dest) == sizes
+
+            # zfp_decompress! auto-detects the embedded header and fills the buffer
+            zfp_decompress!(dest, Ac)
+            @test dest == A
+
+            # buffer can be reused for a different payload of the same shape/type
+            B = rand(T, sizes...)
+            Bc = zfp_compress(B)
+            zfp_decompress!(dest, Bc)
+            @test dest == B
+        end
+    end
+
+    # bogus input has no valid header
+    bogus = rand(UInt8, 64)
+    @test_throws ErrorException zfp_decompress_allocate(bogus)
+
+    # zfp_decompress! validates dest against the header
+    A = rand(Float64, 10)
+    Ac = zfp_compress(A)
+    # wrong element type
+    @test_throws DimensionMismatch zfp_decompress!(zeros(Float32, 10), Ac)
+    # wrong length
+    @test_throws DimensionMismatch zfp_decompress!(zeros(Float64, 2), Ac)
+    # wrong dimensionality
+    @test_throws DimensionMismatch zfp_decompress!(zeros(Float64, 5, 2), Ac)
+
+    # strided dest views get their strides respected in the header path
+    B = rand(Float64, 50, 50)
+    Bc = zfp_compress(B)
+    parent = zeros(Float64, 100, 100)
+    dest_view = @view parent[1:2:100, 1:2:100]
+    zfp_decompress!(dest_view, Bc)
+    @test dest_view == B
+
+    # a non-contiguous compressed buffer would be read as the wrong bytes
+    src_view = @view Ac[1:2:length(Ac)]
+    @test_throws ArgumentError zfp_decompress(src_view)
+    @test_throws ArgumentError zfp_decompress_allocate(src_view)
+    @test_throws ArgumentError zfp_decompress!(zeros(Float64, 10), src_view)
+    # contiguous views are still fine
+    @test zfp_decompress(@view Ac[:]) == A
+end
+
+@testset "promote/demote round-trip" begin
+    # exercise sizes that span the dims=4..0 fall-through (block sizes 256, 64, 16, 4, 1)
+    for n in (1, 3, 4, 5, 17, 100, 256, 257, 1000)
+        for T in (Int8, UInt8, Int16, UInt16)
+            A = rand(T, n)
+            P = zfp_promote(A)
+            @test P isa Vector{Int32}
+            @test length(P) == n
+            @test zfp_demote(T, P) == A
+        end
+    end
+
+    # multi-dimensional, shape preserved
+    for T in (Int8, UInt8, Int16, UInt16)
+        A = rand(T, 7, 9)
+        P = zfp_promote(A)
+        @test P isa Matrix{Int32}
+        @test size(P) == size(A)
+        @test zfp_demote(T, P) == A
+    end
+
+    # size mismatch throws
+    @test_throws DimensionMismatch zfp_promote!(zeros(Int32, 5), Int8[1,2,3,4])
+    @test_throws DimensionMismatch zfp_demote!(zeros(Int8, 5), zeros(Int32, 4))
+end
+
+@testset "zfp_clamp_int" begin
+    # In-range values pass through untouched and was_clamped is false.
+    for T in (Int32, Int64, UInt32, UInt64)
+        out, was_clamped = zfp_clamp_int(T[0, 1, 100])
+        @test out == T[0, 1, 100]
+        @test !was_clamped
+    end
+
+    # Signed: clamps both sides to ±(2^30-1) / ±(2^62-1).
+    s32, c32 = zfp_clamp_int(Int32[typemin(Int32), -10, 0, 10, typemax(Int32)])
+    @test s32 == Int32[-(Int32(2)^30 - 1), -10, 0, 10, Int32(2)^30 - 1]
+    @test c32
+
+    s64, c64 = zfp_clamp_int(Int64[typemin(Int64), 0, typemax(Int64)])
+    @test s64 == Int64[-(Int64(2)^62 - 1), 0, Int64(2)^62 - 1]
+    @test c64
+
+    # Unsigned: lower bound is 0, no negative clamp path.
+    u32, cu32 = zfp_clamp_int(UInt32[0, 5, typemax(UInt32)])
+    @test u32 == UInt32[0, 5, UInt32(2)^30 - 1]
+    @test cu32
 end
